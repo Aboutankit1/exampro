@@ -73,19 +73,19 @@ const Login = () => {
           Register your institute
         </Link>
       </p>
-      <p className="text-sm text-muted text-center mt-2">
+      {/* <p className="text-sm text-muted text-center mt-2">
         Student?{" "}
         <Link to="/register-student" className="text-accent hover:underline">
           Create a student account
         </Link>
-      </p>
+      </p> */}
 
-      <div className="mt-6 pt-5 border-t border-white/5 text-xs text-muted">
+      {/* <div className="mt-6 pt-5 border-t border-white/5 text-xs text-muted">
         <p className="font-medium text-slate-300 mb-1">Demo credentials (after running the seed script):</p>
         <p>superadmin@cbtportal.com / Password123</p>
         <p>admin@everest.edu / Password123</p>
         <p>student1@everest.edu / Password123</p>
-      </div>
+      </div> */}
     </div>
   );
 };
