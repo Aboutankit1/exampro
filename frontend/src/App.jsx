@@ -13,6 +13,7 @@ import ResetPassword from "./pages/ResetPassword.jsx";
 
 import Dashboard from "./pages/Dashboard.jsx";
 import QuestionBank from "./pages/QuestionBank.jsx";
+import Subjects from "./pages/Subjects.jsx";
 import Exams from "./pages/Exams.jsx";
 import Results from "./pages/Results.jsx";
 import Profile from "./pages/Profile.jsx";
@@ -55,6 +56,7 @@ function App() {
 
           <Route element={<ProtectedRoute allowedRoles={["instituteadmin", "teacher"]} />}>
             <Route path="/question-bank" element={<QuestionBank />} />
+            <Route path="/subjects" element={<Subjects />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/exams/:examId/monitor" element={<ExamMonitor />} />
             <Route path="/exams/:examId/preview" element={<ExamPreview />} />

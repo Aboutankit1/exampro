@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { FiPlus, FiX, FiClock, FiEye, FiSend, FiEdit3 } from "react-icons/fi";
+import { FiPlus, FiX, FiClock, FiEye, FiSend, FiEdit3, FiEdit2, FiTrash2 } from "react-icons/fi";
 import api from "../../services/api.js";
 
 const emptyForm = {
@@ -29,14 +29,26 @@ const statusColor = {
   completed: "bg-ink-500 text-muted",
 };
 
+// Converts a stored ISO date string into the "YYYY-MM-DDTHH:mm" format a
+// datetime-local input expects, in the browser's own local time — so an exam
+// edited later shows the same wall-clock time it was originally set to.
+const toDatetimeLocal = (isoString) => {
+  if (!isoString) return "";
+  const d = new Date(isoString);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
 const ExamManagement = () => {
   const navigate = useNavigate();
   const [exams, setExams] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [showModal, setShowModal] = useState(false);
+  const [editingExam, setEditingExam] = useState(null); // null = create mode, exam object = edit mode
   const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(false);
   const [publishingId, setPublishingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
   const load = async () => {
     const { data } = await api.get("/exams");
@@ -47,11 +59,39 @@ const ExamManagement = () => {
     load();
     api.get("/subjects").then(({ data }) => {
       setSubjects(data.subjects);
-      if (data.subjects.length) setForm((f) => ({ ...f, subject: data.subjects[0]._id }));
+      if (data.subjects.length) setForm((f) => ({ ...f, subject: f.subject || data.subjects[0]._id }));
     });
   }, []);
 
-  const handleSubmit = async (e, saveAsDraft) => {
+  const openCreate = () => {
+    setForm({ ...emptyForm, subject: subjects[0]?._id || "" });
+    setEditingExam(null);
+    setShowModal(true);
+  };
+
+  const openEdit = (exam) => {
+    setForm({
+      title: exam.title,
+      description: exam.description || "",
+      subject: exam.subject?._id || exam.subject,
+      instructions: exam.instructions || "",
+      durationMinutes: exam.durationMinutes,
+      totalMarks: exam.totalMarks,
+      passingMarks: exam.passingMarks,
+      randomCount: 0,
+      randomDifficulty: "",
+      randomizeQuestions: exam.randomizeQuestions,
+      randomizeOptions: exam.randomizeOptions,
+      negativeMarking: exam.negativeMarking,
+      startDate: toDatetimeLocal(exam.startDate),
+      endDate: toDatetimeLocal(exam.endDate),
+      maxAttempts: exam.maxAttempts,
+    });
+    setEditingExam(exam);
+    setShowModal(true);
+  };
+
+  const handleCreateSubmit = async (e, saveAsDraft) => {
     e.preventDefault();
     setLoading(true);
     try {
@@ -71,10 +111,42 @@ const ExamManagement = () => {
       await api.post("/exams", payload);
       toast.success(saveAsDraft ? "Saved as draft" : "Exam published — students have been notified");
       setShowModal(false);
-      setForm(emptyForm);
       load();
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to create exam. Make sure the question bank has enough questions for the selected subject.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      // Deliberately excludes randomCount/randomDifficulty/questions — editing
+      // never touches the already-picked question set, only the exam's metadata.
+      const payload = {
+        title: form.title,
+        description: form.description,
+        subject: form.subject,
+        instructions: form.instructions,
+        durationMinutes: form.durationMinutes,
+        totalMarks: form.totalMarks,
+        passingMarks: form.passingMarks,
+        randomizeQuestions: form.randomizeQuestions,
+        randomizeOptions: form.randomizeOptions,
+        negativeMarking: form.negativeMarking,
+        startDate: new Date(form.startDate).toISOString(),
+        endDate: new Date(form.endDate).toISOString(),
+        maxAttempts: form.maxAttempts,
+      };
+      await api.put(`/exams/${editingExam._id}`, payload);
+      toast.success("Exam updated");
+      setShowModal(false);
+      setEditingExam(null);
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to update exam");
     } finally {
       setLoading(false);
     }
@@ -93,11 +165,25 @@ const ExamManagement = () => {
     }
   };
 
+  const handleDelete = async (exam) => {
+    if (!confirm(`Delete "${exam.title}"? Students will no longer be able to see or attempt it. This can't be undone.`)) return;
+    setDeletingId(exam._id);
+    try {
+      await api.delete(`/exams/${exam._id}`);
+      toast.success("Exam deleted");
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to delete exam");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted">{exams.length} exam(s)</p>
-        <button onClick={() => setShowModal(true)} className="btn-primary flex items-center gap-2 text-sm">
+        <button onClick={openCreate} className="btn-primary flex items-center gap-2 text-sm">
           <FiPlus size={16} /> Create exam
         </button>
       </div>
@@ -119,12 +205,27 @@ const ExamManagement = () => {
               <div className="flex items-center gap-2 text-xs text-muted">
                 <FiClock size={13} /> {exam.durationMinutes} min · Passing: {exam.passingMarks}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <button
                   onClick={() => navigate(`/exams/${exam._id}/preview`)}
                   className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5"
                 >
                   <FiEdit3 size={13} /> Preview
+                </button>
+                <button
+                  onClick={() => openEdit(exam)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-ink-600/60 border border-white/10 text-slate-300 hover:bg-ink-500/60"
+                  title="Edit exam"
+                >
+                  <FiEdit2 size={13} />
+                </button>
+                <button
+                  onClick={() => handleDelete(exam)}
+                  disabled={deletingId === exam._id}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-ink-600/60 border border-white/10 text-danger hover:bg-danger/10 disabled:opacity-50"
+                  title="Delete exam"
+                >
+                  <FiTrash2 size={13} />
                 </button>
                 {exam.liveStatus === "draft" ? (
                   <button
@@ -155,11 +256,13 @@ const ExamManagement = () => {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass-card w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 animate-fadeIn">
             <div className="flex items-center justify-between mb-5">
-              <h3 className="font-display text-lg font-semibold text-slate-100">Create exam</h3>
-              <button onClick={() => setShowModal(false)} className="text-muted hover:text-white"><FiX size={20} /></button>
+              <h3 className="font-display text-lg font-semibold text-slate-100">
+                {editingExam ? "Edit exam" : "Create exam"}
+              </h3>
+              <button onClick={() => { setShowModal(false); setEditingExam(null); }} className="text-muted hover:text-white"><FiX size={20} /></button>
             </div>
 
-            <form className="space-y-4">
+            <form className="space-y-4" onSubmit={editingExam ? handleEditSubmit : undefined}>
               <div>
                 <label className="text-xs text-muted mb-1.5 block">Exam title</label>
                 <input className="input-field" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
@@ -174,6 +277,13 @@ const ExamManagement = () => {
                 <label className="text-xs text-muted mb-1.5 block">Instructions</label>
                 <textarea rows={2} className="input-field" value={form.instructions} onChange={(e) => setForm({ ...form, instructions: e.target.value })} />
               </div>
+
+              {editingExam && (editingExam.liveStatus === "live" || editingExam.liveStatus === "completed") && (
+                <p className="text-xs text-warning bg-warning/10 border border-warning/20 rounded-lg p-3">
+                  This exam is already {editingExam.liveStatus}. Changing marks, timing, or attempts now could make
+                  things inconsistent for students who've already started or finished it.
+                </p>
+              )}
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
@@ -190,21 +300,29 @@ const ExamManagement = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-muted mb-1.5 block"># Random questions to pick</label>
-                  <input type="number" className="input-field" value={form.randomCount} onChange={(e) => setForm({ ...form, randomCount: Number(e.target.value) })} />
+              {!editingExam && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-muted mb-1.5 block"># Random questions to pick</label>
+                    <input type="number" className="input-field" value={form.randomCount} onChange={(e) => setForm({ ...form, randomCount: Number(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted mb-1.5 block">Difficulty filter (optional)</label>
+                    <select className="input-field" value={form.randomDifficulty} onChange={(e) => setForm({ ...form, randomDifficulty: e.target.value })}>
+                      <option value="">Any</option>
+                      <option value="easy">Easy</option>
+                      <option value="medium">Medium</option>
+                      <option value="hard">Hard</option>
+                    </select>
+                  </div>
                 </div>
-                <div>
-                  <label className="text-xs text-muted mb-1.5 block">Difficulty filter (optional)</label>
-                  <select className="input-field" value={form.randomDifficulty} onChange={(e) => setForm({ ...form, randomDifficulty: e.target.value })}>
-                    <option value="">Any</option>
-                    <option value="easy">Easy</option>
-                    <option value="medium">Medium</option>
-                    <option value="hard">Hard</option>
-                  </select>
-                </div>
-              </div>
+              )}
+              {editingExam && (
+                <p className="text-xs text-muted bg-ink-600/30 rounded-lg p-3">
+                  The question set ({editingExam.totalQuestions} questions) isn't editable here — it stays as
+                  originally generated. You can still change everything else below.
+                </p>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -237,21 +355,31 @@ const ExamManagement = () => {
                 </label>
               </div>
 
-              <p className="text-xs text-muted">
-                <strong className="text-slate-300">Save as draft</strong> keeps this hidden from students and sends no
-                notification — use Preview to check it, then Publish when ready.{" "}
-                <strong className="text-slate-300">Publish now</strong> makes it visible immediately and notifies
-                eligible students right away.
-              </p>
+              {!editingExam && (
+                <p className="text-xs text-muted">
+                  <strong className="text-slate-300">Save as draft</strong> keeps this hidden from students and sends no
+                  notification — use Preview to check it, then Publish when ready.{" "}
+                  <strong className="text-slate-300">Publish now</strong> makes it visible immediately and notifies
+                  eligible students right away.
+                </p>
+              )}
 
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowModal(false)} className="btn-secondary flex-1">Cancel</button>
-                <button type="button" onClick={(e) => handleSubmit(e, true)} disabled={loading} className="btn-secondary flex-1">
-                  Save as draft
-                </button>
-                <button type="button" onClick={(e) => handleSubmit(e, false)} disabled={loading} className="btn-primary flex-1">
-                  Publish now
-                </button>
+                <button type="button" onClick={() => { setShowModal(false); setEditingExam(null); }} className="btn-secondary flex-1">Cancel</button>
+                {editingExam ? (
+                  <button type="submit" disabled={loading} className="btn-primary flex-1">
+                    {loading ? "Saving..." : "Save changes"}
+                  </button>
+                ) : (
+                  <>
+                    <button type="button" onClick={(e) => handleCreateSubmit(e, true)} disabled={loading} className="btn-secondary flex-1">
+                      Save as draft
+                    </button>
+                    <button type="button" onClick={(e) => handleCreateSubmit(e, false)} disabled={loading} className="btn-primary flex-1">
+                      Publish now
+                    </button>
+                  </>
+                )}
               </div>
             </form>
           </div>

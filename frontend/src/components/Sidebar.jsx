@@ -3,6 +3,7 @@ import { useSelector } from "react-redux";
 import {
   FiGrid,
   FiBookOpen,
+  FiBook,
   FiFileText,
   FiUsers,
   FiBarChart2,
@@ -21,6 +22,7 @@ const menus = {
   instituteadmin: [
     { to: "/dashboard", label: "Overview", icon: FiGrid },
     { to: "/users", label: "Teachers & Students", icon: FiUsers },
+    { to: "/subjects", label: "Subjects", icon: FiBook },
     { to: "/question-bank", label: "Question Bank", icon: FiBookOpen },
     { to: "/exams", label: "Exams", icon: FiFileText },
     { to: "/reports", label: "Reports", icon: FiBarChart2 },
@@ -28,6 +30,7 @@ const menus = {
   ],
   teacher: [
     { to: "/dashboard", label: "Overview", icon: FiGrid },
+    { to: "/subjects", label: "Subjects", icon: FiBook },
     { to: "/question-bank", label: "Question Bank", icon: FiBookOpen },
     { to: "/exams", label: "Exams", icon: FiFileText },
     { to: "/reports", label: "Reports", icon: FiBarChart2 },

@@ -5,6 +5,7 @@ import Navbar from "../components/Navbar.jsx";
 const titleMap = {
   "/dashboard": "Overview",
   "/question-bank": "Question Bank",
+  "/subjects": "Subjects",
   "/exams": "Exams",
   "/results": "Results",
   "/profile": "My Profile",
