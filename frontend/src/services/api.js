@@ -24,6 +24,17 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
+    // Institute deactivated/unapproved mid-session — this isn't a token problem,
+    // so refreshing won't help. Log out immediately with a clear reason.
+    if (error.response?.data?.code === "INSTITUTE_INACTIVE") {
+      localStorage.removeItem("cbt_access_token");
+      localStorage.removeItem("cbt_refresh_token");
+      localStorage.removeItem("cbt_user");
+      toast.error(error.response.data.message || "Your institute's access has changed. Please contact your administrator.");
+      window.location.href = "/login";
+      return Promise.reject(error);
+    }
+
     if (error.response?.status === 401 && !originalRequest._retry && !originalRequest.url.includes("/auth/")) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {

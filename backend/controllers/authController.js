@@ -243,6 +243,10 @@ export const login = asyncHandler(async (req, res) => {
           : `Your institute's registration was not approved${institute.rejectionReason ? `: ${institute.rejectionReason}` : "."}`
       );
     }
+    if (institute && !institute.isActive) {
+      res.status(403);
+      throw new Error("This institute has been deactivated. Contact ExamCore support if you believe this is a mistake.");
+    }
   }
 
   user.lastLogin = new Date();
@@ -270,6 +274,18 @@ export const refreshToken = asyncHandler(async (req, res) => {
   if (decoded.sessionVersion !== user.sessionVersion) {
     res.status(401);
     throw new Error("Session expired — this account was logged in on another device.");
+  }
+
+  if (user.institute && user.role !== "superadmin") {
+    const institute = await Institute.findById(user.institute);
+    if (!institute || !institute.isActive || institute.approvalStatus !== "approved") {
+      res.status(403);
+      throw new Error(
+        !institute || !institute.isActive
+          ? "This institute has been deactivated."
+          : "Your institute's registration is pending approval."
+      );
+    }
   }
 
   const accessToken = generateAccessToken(user._id, user.role, user.sessionVersion);
